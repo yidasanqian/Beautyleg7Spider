@@ -11,9 +11,7 @@
 
 #### 安装教程
 
-1. xxxx
-2. xxxx
-3. xxxx
+[sql脚本](www.beautyleg7.com/sql/beauty_girl.sql)
 
 #### 使用说明
 
