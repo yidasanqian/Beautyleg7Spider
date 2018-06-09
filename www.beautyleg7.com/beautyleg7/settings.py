@@ -14,11 +14,18 @@ BOT_NAME = 'beautyleg7'
 SPIDER_MODULES = ['beautyleg7.spiders']
 NEWSPIDER_MODULE = 'beautyleg7.spiders'
 
-# Crawl responsibly by identifying yourself (and your website) on the user-agent
-# USER_AGENT = 'beautyleg7 (+http://www.yourdomain.com)'
+# 生产环境打开
+# LOG_FILE = "/var/log/jobbole.spiders.log"
+# LOG_LEVEL = "INFO"
+
+DOWNLOAD_TIMEOUT = 10
+# Default: 100
+CONCURRENT_ITEMS = 200
+
+USER_AGENT = 'Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/66.0.3359.117 Safari/537.36'
 
 # Obey robots.txt rules
-ROBOTSTXT_OBEY = True
+ROBOTSTXT_OBEY = False
 
 # Configure maximum concurrent requests performed by Scrapy (default: 16)
 # CONCURRENT_REQUESTS = 32
@@ -82,8 +89,19 @@ ROBOTSTXT_OBEY = True
 
 # Enable and configure HTTP caching (disabled by default)
 # See https://doc.scrapy.org/en/latest/topics/downloader-middleware.html#httpcache-middleware-settings
-# HTTPCACHE_ENABLED = True
-# HTTPCACHE_EXPIRATION_SECS = 0
-# HTTPCACHE_DIR = 'httpcache'
-# HTTPCACHE_IGNORE_HTTP_CODES = []
-# HTTPCACHE_STORAGE = 'scrapy.extensions.httpcache.FilesystemCacheStorage'
+HTTPCACHE_ENABLED = True
+HTTPCACHE_EXPIRATION_SECS = 60 * 60 * 24
+HTTPCACHE_DIR = 'httpcache'
+HTTPCACHE_IGNORE_HTTP_CODES = [203, 304, 403, 404, 500, 502]
+HTTPCACHE_STORAGE = 'scrapy.extensions.httpcache.FilesystemCacheStorage'
+
+MYSQL_HOST = "118.31.71.64"
+MYSQL_PORT = 3306
+MYSQL_USER = "root"
+MYSQL_PASSWORD = "lly0123*.."
+MYSQL_DB_NAME = "beauty_girl"
+
+REDIS_HOST = "40.125.175.187"
+REDIS_PORT = 6379
+REDIS_DB = 0
+REDIS_PASSWORD = "LINredis01."
