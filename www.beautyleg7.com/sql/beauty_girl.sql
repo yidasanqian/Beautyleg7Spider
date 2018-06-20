@@ -12,14 +12,18 @@ CREATE TABLE `beauty7_album` (
   UNIQUE KEY `url_object_id_UNIQUE` (`album_url_object_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE TABLE `beauty7_album_images` (
-  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
-  `album_id` int(11) NOT NULL COMMENT 'beauty7_album表的主键',
-  `item_url` varchar(256) NOT NULL COMMENT '专辑的内容条目链接',
-  `item_url_object_id` varchar(32) NOT NULL COMMENT '专辑的内容条目链接唯一id',
-  `item_title` varchar(45) DEFAULT NULL COMMENT '链接内容标题',
-  `stage_name` varchar(45) DEFAULT NULL COMMENT '艺名',
-  `publish_date` datetime DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `beauty7__UNIQUE` (`item_url_object_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+create table beauty7_album_image
+(
+	id int unsigned auto_increment
+		primary key,
+	album_id int not null comment 'beauty7_album表的主键',
+	item_url varchar(256) not null comment '专辑的内容条目链接',
+	item_url_object_id varchar(32) not null comment '专辑的内容条目链接唯一id',
+	item_url_list_json text null comment '专辑的内容条目链接列表的json形式',
+	stage_name varchar(45) null comment '艺名',
+	publish_date datetime null,
+	item_title varchar(45) null comment '链接内容标题',
+	constraint beauty7__UNIQUE
+		unique (item_url_object_id)
+) engine=InnoDB;
+

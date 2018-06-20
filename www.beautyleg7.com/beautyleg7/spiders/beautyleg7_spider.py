@@ -8,7 +8,7 @@ import scrapy
 from sqlalchemy import create_engine, func
 from sqlalchemy.orm import sessionmaker
 
-from ..items import Album, AlbumImageRelationItem, AlbumItem, AlbumImagesItem
+from ..items import Album, AlbumImageRelationItem, AlbumItem, AlbumImageItem
 from ..utils.const import const
 
 
@@ -71,8 +71,14 @@ class Beautyleg7Spider(scrapy.Spider):
                     else:
                         number = "No.0"
                     create_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                    album_item = AlbumItem(category, album_url, album_url_object_id, album_title, cover_url, number,
-                                           create_date)
+                    album_item = AlbumItem()
+                    album_item['category'] = category
+                    album_item['album_url'] = album_url
+                    album_item['album_url_object_id'] = album_url_object_id
+                    album_item['album_title'] = album_title
+                    album_item['cover_url'] = cover_url
+                    album_item['number'] = number
+                    album_item['create_date'] = create_date
                     yield response.follow(url=album_url,
                                           meta={"AlbumItem": album_item},
                                           callback=self.parse_detail)
@@ -90,17 +96,11 @@ class Beautyleg7Spider(scrapy.Spider):
 
     def parse_detail(self, response):
         album_item = response.meta.get("AlbumItem")
-        album_images_item = AlbumImagesItem()
+        album_images_item = AlbumImageItem()
         album_image_relation_item = AlbumImageRelationItem()
-        album_image_relation_item['category'] = album_item.category
-        album_image_relation_item['album_url'] = album_item.album_url
-        album_image_relation_item['album_url_object_id'] = album_item.album_url_object_id
-        album_image_relation_item['album_title'] = album_item.album_title
-        album_image_relation_item['cover_url'] = album_item.cover_url
-        album_image_relation_item['number'] = album_item.number
-        album_image_relation_item['number'] = album_item.create_date
+        album_image_relation_item['album_item'] = album_item
 
-        item_title = response.xpath('//div[@class="content"]/h1/text()')
+        item_title = response.xpath('//div[@class="content"]/h1/text()').extract_first().strip()
         regx = "\s?\w+\[[^\w]?"
         list = re.findall(regx, item_title)
         if list.__len__() > 0:
@@ -109,7 +109,7 @@ class Beautyleg7Spider(scrapy.Spider):
             stage_name = "unknown"
         publish_date = response.xpath('//div[@class="tit"]/span/text()').extract_first().split(":")[1]
         # todo 详情页多个图片链接
-        image_link_list = response.css('.contents a img::attr(src)')
+        image_link_list = response.css('.contents a img::attr(src)').extract()
 
         # album_image_relation_item['album_id'] = album_id
         # album_image_relation_item['item_url'] = item_url

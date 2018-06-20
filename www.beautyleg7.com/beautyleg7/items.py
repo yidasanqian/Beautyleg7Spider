@@ -6,7 +6,7 @@
 # https://doc.scrapy.org/en/latest/topics/items.html
 
 import scrapy
-from sqlalchemy import Column, String, DateTime, Integer
+from sqlalchemy import Column, String, DateTime, Integer, Text
 from sqlalchemy.ext.declarative import declarative_base
 
 
@@ -20,30 +20,22 @@ class AlbumItem(scrapy.Item):
     create_date = scrapy.Field()
 
 
-class AlbumImagesItem(scrapy.Item):
+class AlbumImageItem(scrapy.Item):
     album_id = scrapy.Field()
     item_url = scrapy.Field()
     item_url_object_id = scrapy.Field()
+    item_url_list_json = scrapy.Field()
     item_title = scrapy.Field()
     stage_name = scrapy.Field()
     publish_date = scrapy.Field()
 
 
 class AlbumImageRelationItem(scrapy.Item):
-    category = scrapy.Field()
-    album_url = scrapy.Field()
-    album_url_object_id = scrapy.Field()
-    album_title = scrapy.Field()
-    cover_url = scrapy.Field()
-    number = scrapy.Field()
-    create_date = scrapy.Field()
-
-    album_id = scrapy.Field()
-    item_url = scrapy.Field()
-    item_url_object_id = scrapy.Field()
-    item_title = scrapy.Field()
-    stage_name = scrapy.Field()
-    publish_date = scrapy.Field()
+    """
+    AlbumItem关联多个AlbumImagesItem
+    """
+    album_item = scrapy.Field()
+    album_image_list = scrapy.Field()
 
 
 Base = declarative_base()
@@ -71,21 +63,23 @@ class Album(Base):
         self.create_date = create_date
 
 
-class AlbumImages(Base):
-    __tablename__ = 'beauty7_album_images'
+class AlbumImage(Base):
+    __tablename__ = 'beauty7_album_image'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     album_id = Column(Integer)
     item_url = Column(String(256))
     item_url_object_id = Column(String(32), unique=True)
+    item_url_list_json = Column(Text)
     item_title = Column(String(45))
     stage_name = Column(String(45))
     publish_date = Column(DateTime)
 
-    def __init__(self, album_id, item_url, item_url_object_id, item_title, stage_name, publish_date):
+    def __init__(self, album_id, item_url, item_url_object_id, item_url_list_json, item_title, stage_name, publish_date):
         self.album_id = album_id
         self.item_url = item_url
         self.item_url_object_id = item_url_object_id
+        self.item_url_list_json = item_url_list_json
         self.item_title = item_title
         self.stage_name = stage_name
         self.publish_date = publish_date

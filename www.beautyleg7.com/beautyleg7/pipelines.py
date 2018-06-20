@@ -7,7 +7,7 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from .items import AlbumItem, AlbumImagesItem
+from .items import AlbumItem, AlbumImageItem
 
 
 class Beautyleg7MySqlPipeline(object):
@@ -50,7 +50,7 @@ class Beautyleg7MySqlPipeline(object):
         result = self.db_session.add(album_item)
         try:
             last_insert_id = result.lastrowid
-            # AlbumImagesItem
+            # AlbumImageItem
             # todo album_id 关联id验证
             album_id = last_insert_id
             item_url = item['item_url']
@@ -58,8 +58,8 @@ class Beautyleg7MySqlPipeline(object):
             item_title = item['item_title']
             stage_name = item['stage_name']
             publish_date = item['publish_date']
-            album_images_item = AlbumImagesItem(album_id, item_url, item_url_object_id, item_title, stage_name,
-                                                publish_date)
+            album_images_item = AlbumImageItem(album_id, item_url, item_url_object_id, item_title, stage_name,
+                                               publish_date)
             self.db_session.add(album_images_item)
             # 提交即保存到数据库:
             self.db_session.commit()
