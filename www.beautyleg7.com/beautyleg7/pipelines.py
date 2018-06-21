@@ -7,7 +7,7 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from .items import AlbumItem, AlbumImageItem
+from .items import Album, AlbumImage
 
 
 class Beautyleg7MySqlPipeline(object):
@@ -39,28 +39,31 @@ class Beautyleg7MySqlPipeline(object):
 
     def process_item(self, item, spider):
         # AlbumItem
-        category = item['category']
-        album_url = item['album_url']
-        album_url_object_id = item['album_url_object_id']
-        album_title = item['album_title']
-        cover_url = item['cover_url']
-        number = item['number']
-        create_date = item['create_date']
-        album_item = AlbumItem(category, album_url, album_url_object_id, album_title, cover_url, number, create_date)
-        result = self.db_session.add(album_item)
+        album_item = item['album_item']
+        # AlbumImageItem list
+        album_image_item_list = item['album_image_item_list']
+        category = album_item['category']
+        album_url = album_item['album_url']
+        album_url_object_id = album_item['album_url_object_id']
+        album_title = album_item['album_title']
+        cover_url = album_item['cover_url']
+        number = album_item['number']
+        create_date = album_item['create_date']
+        album = Album(category, album_url, album_url_object_id, album_title, cover_url, number, create_date)
         try:
-            last_insert_id = result.lastrowid
-            # AlbumImageItem
-            # todo album_id 关联id验证
-            album_id = last_insert_id
-            item_url = item['item_url']
-            item_url_object_id = item['item_url_object_id']
-            item_title = item['item_title']
-            stage_name = item['stage_name']
-            publish_date = item['publish_date']
-            album_images_item = AlbumImageItem(album_id, item_url, item_url_object_id, item_title, stage_name,
-                                               publish_date)
-            self.db_session.add(album_images_item)
+            # album_id 关联id验证
+            album_image_list = []
+            for album_image_item in album_image_item_list:
+                item_url = album_image_item['item_url']
+                item_url_object_id = album_image_item['item_url_object_id']
+                item_url_list_json = album_image_item['item_url_list_json']
+                item_title = album_image_item['item_title']
+                stage_name = album_image_item['stage_name']
+                publish_date = album_image_item['publish_date']
+                album_image = AlbumImage(item_url, item_url_object_id, item_url_list_json, item_title, stage_name,
+                                         publish_date, album)
+                album_image_list.append(album_image)
+            self.db_session.add_all(album_image_list)
             # 提交即保存到数据库:
             self.db_session.commit()
         except Exception as e:

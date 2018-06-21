@@ -4,7 +4,10 @@ import hashlib
 import re
 from datetime import datetime
 
+import requests
 import scrapy
+from lxml import etree
+from scrapy.http import HtmlResponse
 from sqlalchemy import create_engine, func
 from sqlalchemy.orm import sessionmaker
 
@@ -18,6 +21,13 @@ class Beautyleg7Spider(scrapy.Spider):
     start_urls = [('http://www.beautyleg7.com/' + category) for category in category_list]
 
     const.REPEATED_THRESHOLD = 10
+
+    def __init__(self, name=None, **kwargs):
+        super().__init__(name=None, **kwargs)
+        self.db_session = None
+        self.album_item = None
+        self.album_image_item_list = []
+        self.album_image_relation_item = AlbumImageRelationItem()
 
     def start_requests(self):
         mysql_host = self.crawler.settings.get("MYSQL_HOST")
@@ -44,7 +54,7 @@ class Beautyleg7Spider(scrapy.Spider):
             self.logger.warn("响应为空，不做处理！")
         else:
             category = response.css('.sitepath a')[1].css('a::text').extract_first().strip()
-            album_nodes = response.css('.pic')
+            album_nodes = response.css('.pic .item')
             for album_node in album_nodes:
                 album_url = album_node.css('.p a::attr(href)').extract_first().strip()
                 album_url_object_id = self.get_md5(album_url)
@@ -83,8 +93,7 @@ class Beautyleg7Spider(scrapy.Spider):
                                           meta={"AlbumItem": album_item},
                                           callback=self.parse_detail)
 
-            # todo 提取下一页并交给scrapy下载
-            current_page = int(response.css('.page .thisclass').extract_first())
+            # 提取下一页并交给scrapy下载
             next_url = response.css('.page li a::attr(href)').extract_first()
             # 如果url重复次数超过阈值则停止爬取
             if next_url and repeated_count < const.REPEATED_THRESHOLD:
@@ -95,29 +104,64 @@ class Beautyleg7Spider(scrapy.Spider):
                 self.db_session.close()
 
     def parse_detail(self, response):
-        album_item = response.meta.get("AlbumItem")
-        album_images_item = AlbumImageItem()
-        album_image_relation_item = AlbumImageRelationItem()
-        album_image_relation_item['album_item'] = album_item
+        self.album_item = response.meta.get("AlbumItem")
+        self.album_image_relation_item['album_item'] = self.album_item
+        self.parse_image_item(response)
+        # 详情页分页链接,循环生成所有子页面的请求
+        relative_next_page_list = response.css('.page li a::attr(href)').extract()
+        for relative_next_page in relative_next_page_list[2:-1]:
+            abs_next_page = response.urljoin(relative_next_page)
+            self.logger.info("abs_next_page：%s" % abs_next_page)
+            self.get_album_image_list(abs_next_page)
+        self.album_image_relation_item['album_image_item_list'] = self.album_image_item_list
+        yield self.album_image_relation_item
 
-        item_title = response.xpath('//div[@class="content"]/h1/text()').extract_first().strip()
-        regx = "\s?\w+\[[^\w]?"
-        list = re.findall(regx, item_title)
-        if list.__len__() > 0:
-            stage_name = list[0].split("[")[0]
+    def get_album_image_list(self, abs_next_page):
+        """
+        使用下页绝对路径同步请求
+        :param abs_next_page:
+        :return:
+        """
+        resp = requests.get(abs_next_page)
+        encoding = requests.utils.get_encodings_from_content(resp.text)
+        resp.encoding = encoding[0]
+        self.parse_image_item(etree.HTML(resp.text))
+
+    def parse_image_item(self, response):
+        """
+        解析item并返回给pipelines
+        :param response: 如果response类型是继承自scrapy的TextResponse类则使用scrapy的Selector来解析，否则使用lxml来解析
+        :return:
+        """
+        if isinstance(response, HtmlResponse):
+            item_title = response.xpath('//div[@class="content"]/h1/text()').extract_first().strip()
+            publish_date = response.xpath('//div[@class="tit"]/span/text()').extract_first().split(":")[1]
+            image_link_list = response.css('.contents a img::attr(src)').extract()
+        else:
+            item_title = response.xpath('//div[@class="content"]/h1/text()')[0].strip()
+            publish_date = response.xpath('//div[@class="tit"]/span/text()')[0].split(":")[1]
+            image_link_list = response.xpath('//div[@class="contents"]/a/img')
+            image_link_list = [image_link.attrib['src'] for image_link in image_link_list]
+
+        regex = "\s?\w+\[[^\w]?"
+        regex_group = re.findall(regex, item_title)
+        if regex_group.__len__() > 0:
+            stage_name = regex_group[0].split("[")[0].strip()
         else:
             stage_name = "unknown"
-        publish_date = response.xpath('//div[@class="tit"]/span/text()').extract_first().split(":")[1]
-        # todo 详情页多个图片链接
-        image_link_list = response.css('.contents a img::attr(src)').extract()
 
-        # album_image_relation_item['album_id'] = album_id
-        # album_image_relation_item['item_url'] = item_url
-        # album_image_relation_item['item_url_object_id'] = item_url_object_id
-        album_image_relation_item['item_title'] = item_title
-        album_image_relation_item['stage_name'] = stage_name
-        album_image_relation_item['publish_date'] = publish_date
-        # todo 详情页分页链接
+        # 详情页多个图片链接
+        for image_url in image_link_list:
+            album_image_item = AlbumImageItem()
+            album_image_item['item_url'] = image_url
+            album_image_item['item_url_object_id'] = self.get_md5(image_url)
+            item_url_list_json = "{}"
+            album_image_item['item_url_list_json'] = item_url_list_json
+            album_image_item['item_title'] = item_title
+            album_image_item['stage_name'] = stage_name
+            album_image_item['publish_date'] = publish_date
+            self.album_image_item_list.append(album_image_item)
+        return self.album_image_item_list
 
     @staticmethod
     def get_md5(param):
