@@ -1,9 +1,7 @@
 # Beautyleg7Spider
 
 #### 项目介绍
-{**以下是码云平台说明，您可以替换为您的项目简介**
-码云是开源中国推出的基于 Git 的代码托管平台（同时支持 SVN）。专为开发者提供稳定、高效、安全的云端软件开发协作平台
-无论是个人、团队、或是企业，都能够用码云实现代码托管、项目管理、协作开发。企业项目请看 [https://gitee.com/enterprises](https://gitee.com/enterprises)}
+一个利用Scrapy框架实现的完整的爬取www.beautyleg7.com网站所有图片的爬虫
 
 #### 软件架构
 软件架构说明
@@ -13,15 +11,38 @@
 
 [sql脚本](www.beautyleg7.com/sql/beauty_girl.sql)
 
+```
+pip install pywin32
+pip install mysql-connector-python
+pip install Pillow
+pip install PyMySQL
+pip install redis
+pip install Scrapy
+pip install scrapyd
+pip install scrapyd-client
+pip install SQLAlchemy
+pip install pymongo
+pip install gevent
+```
+
 #### 使用说明
 
+
+#### 技术要点
 [爬虫高性能相关（协程效率最高，IO密集型）](https://www.cnblogs.com/jokerbj/p/8283853.html)
 
 [Grequests VS aiohttp+asyncio](https://blog.csdn.net/getcomputerstyle/article/details/78446892)
 
-1. xxxx
-2. xxxx
-3. xxxx
+**爬取过程出现异常中断的解决方案：**
+
+1. 爬取前记录当前爬取的主题页面的URL，存储到Redis key：URL，value：is_persisted（取值为0或1，默认为0）。
+2. 当记录已存储到数据库后，设置Redis对应key的value为1（1表示已持久化到数据库）。
+3. 若步骤1和2中间出现异常导致程序异常中断停止，则恢复时从Redis取得上次爬出的主题页面URL重新爬取。
+
+**重复爬取主题页面URL的解决方案：**
+
+1. Redis存储爬取最后一页的页码和及最后一条的主题URL。
+2. 当最后一页的主题URL的value为1时，开始判断重复的主题URL数，当超过预设的阈值时停止爬取。
 
 #### 参与贡献
 
@@ -29,13 +50,3 @@
 2. 新建 Feat_xxx 分支
 3. 提交代码
 4. 新建 Pull Request
-
-
-#### 码云特技
-
-1. 使用 Readme\_XXX.md 来支持不同的语言，例如 Readme\_en.md, Readme\_zh.md
-2. 码云官方博客 [blog.gitee.com](https://blog.gitee.com)
-3. 你可以 [https://gitee.com/explore](https://gitee.com/explore) 这个地址来了解码云上的优秀开源项目
-4. [GVP](https://gitee.com/gvp) 全称是码云最有价值开源项目，是码云综合评定出的优秀开源项目
-5. 码云官方提供的使用手册 [http://git.mydoc.io/](http://git.mydoc.io/)
-6. 码云封面人物是一档用来展示码云会员风采的栏目 [https://gitee.com/gitee-stars/](https://gitee.com/gitee-stars/)
