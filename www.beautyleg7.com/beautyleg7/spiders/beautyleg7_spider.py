@@ -4,8 +4,10 @@ import hashlib
 import re
 from datetime import datetime
 
+import gevent
 import requests
 import scrapy
+from gevent.pool import Pool
 from lxml import etree
 from scrapy.http import HtmlResponse
 from sqlalchemy import create_engine, func
@@ -25,6 +27,8 @@ class Beautyleg7Spider(scrapy.Spider):
     def __init__(self, name=None, **kwargs):
         super().__init__(name=None, **kwargs)
         self.db_session = None
+        self.gevent_pool = Pool(16)
+
         self.album_item = None
         self.album_image_item_list = []
         self.album_image_relation_item = AlbumImageRelationItem()
@@ -109,12 +113,20 @@ class Beautyleg7Spider(scrapy.Spider):
         self.parse_image_item(response)
         # 详情页分页链接,循环生成所有子页面的请求
         relative_next_page_list = response.css('.page li a::attr(href)').extract()
-        for relative_next_page in relative_next_page_list[2:-1]:
-            abs_next_page = response.urljoin(relative_next_page)
-            self.logger.info("abs_next_page：%s" % abs_next_page)
-            self.get_album_image_list(abs_next_page)
+        # 使用gevent协程池提升网络IO处理效率
+        next_page_threads = [
+            self.gevent_pool.spawn(self.get_album_image_list, response.urljoin(relative_next_page))
+            for relative_next_page in relative_next_page_list[2:-1]
+        ]
+        gevent.joinall(next_page_threads)
         self.album_image_relation_item['album_image_item_list'] = self.album_image_item_list
+        # 重新初始化
+        self.album_image_item_list = []
         yield self.album_image_relation_item
+
+    # 执行并获取响应列表（处理异常）
+    # def exception_handler(self, request, exception):
+    #     self.logger.error("请求url：%s,异常:%s" % (request.url, exception))
 
     def get_album_image_list(self, abs_next_page):
         """
@@ -123,9 +135,12 @@ class Beautyleg7Spider(scrapy.Spider):
         :return:
         """
         resp = requests.get(abs_next_page)
-        encoding = requests.utils.get_encodings_from_content(resp.text)
-        resp.encoding = encoding[0]
-        self.parse_image_item(etree.HTML(resp.text))
+        if resp.status_code == 200:
+            encoding = requests.utils.get_encodings_from_content(resp.text)
+            resp.encoding = encoding[0]
+            self.parse_image_item(etree.HTML(resp.text))
+        else:
+            self.logger.warn("下载此页{}失败,返回的状态码为{}".format(abs_next_page, resp.status_code))
 
     def parse_image_item(self, response):
         """
