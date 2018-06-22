@@ -15,8 +15,8 @@ SPIDER_MODULES = ['beautyleg7.spiders']
 NEWSPIDER_MODULE = 'beautyleg7.spiders'
 
 # 生产环境打开
-# LOG_FILE = "/var/log/jobbole.spiders.log"
-# LOG_LEVEL = "INFO"
+LOG_FILE = "/var/log/beautyleg7.spiders.log"
+LOG_LEVEL = "INFO"
 
 DOWNLOAD_TIMEOUT = 10
 # Default: 100
