@@ -15,6 +15,10 @@
 
 #### 使用说明
 
+[爬虫高性能相关（协程效率最高，IO密集型）](https://www.cnblogs.com/jokerbj/p/8283853.html)
+
+[Grequests VS aiohttp+asyncio](https://blog.csdn.net/getcomputerstyle/article/details/78446892)
+
 1. xxxx
 2. xxxx
 3. xxxx

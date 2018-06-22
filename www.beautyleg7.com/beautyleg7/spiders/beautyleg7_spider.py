@@ -27,7 +27,7 @@ class Beautyleg7Spider(scrapy.Spider):
     def __init__(self, name=None, **kwargs):
         super().__init__(name=None, **kwargs)
         self.db_session = None
-        self.gevent_pool = Pool(16)
+        self.gevent_pool = Pool(32)
 
         self.album_item = None
         self.album_image_item_list = []
@@ -76,23 +76,7 @@ class Beautyleg7Spider(scrapy.Spider):
                     repeated_count += 1
                     continue
                 else:
-                    album_title = album_node.css('.p a img::attr(alt)').extract_first().strip()
-                    cover_url = album_node.css('.p a img::attr(src)').extract_first().strip()
-                    regx = "\d+\.\d+.\d+\s+No\.\d+"
-                    list = re.findall(regx, album_title)
-                    if list.__len__() > 0:
-                        number = list[0]
-                    else:
-                        number = "No.0"
-                    create_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                    album_item = AlbumItem()
-                    album_item['category'] = category
-                    album_item['album_url'] = album_url
-                    album_item['album_url_object_id'] = album_url_object_id
-                    album_item['album_title'] = album_title
-                    album_item['cover_url'] = cover_url
-                    album_item['number'] = number
-                    album_item['create_date'] = create_date
+                    album_item = self.parse_album_item(album_node, album_url, album_url_object_id, category)
                     yield response.follow(url=album_url,
                                           meta={"AlbumItem": album_item},
                                           callback=self.parse_detail)
@@ -107,15 +91,35 @@ class Beautyleg7Spider(scrapy.Spider):
                 self.logger.info("None Next page!重复次数：%s" % repeated_count)
                 self.db_session.close()
 
+    def parse_album_item(self, album_node, album_url, album_url_object_id, category):
+        album_title = album_node.css('.p a img::attr(alt)').extract_first().strip()
+        cover_url = album_node.css('.p a img::attr(src)').extract_first().strip()
+        regex = "\d+\.\d+.\d+\s+No\.\d+"
+        number_group = re.findall(regex, album_title)
+        if number_group.__len__() > 0:
+            number = number_group[0]
+        else:
+            number = "No.unknown"
+        create_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        album_item = AlbumItem()
+        album_item['category'] = category
+        album_item['album_url'] = album_url
+        album_item['album_url_object_id'] = album_url_object_id
+        album_item['album_title'] = album_title
+        album_item['cover_url'] = cover_url
+        album_item['number'] = number
+        album_item['create_date'] = create_date
+        return album_item
+
     def parse_detail(self, response):
         self.album_item = response.meta.get("AlbumItem")
         self.album_image_relation_item['album_item'] = self.album_item
-        self.parse_image_item(response)
+        self.parse_album_image_item(response)
         # 详情页分页链接,循环生成所有子页面的请求
         relative_next_page_list = response.css('.page li a::attr(href)').extract()
         # 使用gevent协程池提升网络IO处理效率
         next_page_threads = [
-            self.gevent_pool.spawn(self.get_album_image_list, response.urljoin(relative_next_page))
+            self.gevent_pool.spawn(self.get_album_image_item_list, response.urljoin(relative_next_page))
             for relative_next_page in relative_next_page_list[2:-1]
         ]
         gevent.joinall(next_page_threads)
@@ -128,7 +132,7 @@ class Beautyleg7Spider(scrapy.Spider):
     # def exception_handler(self, request, exception):
     #     self.logger.error("请求url：%s,异常:%s" % (request.url, exception))
 
-    def get_album_image_list(self, abs_next_page):
+    def get_album_image_item_list(self, abs_next_page):
         """
         使用下页绝对路径同步请求
         :param abs_next_page:
@@ -138,11 +142,11 @@ class Beautyleg7Spider(scrapy.Spider):
         if resp.status_code == 200:
             encoding = requests.utils.get_encodings_from_content(resp.text)
             resp.encoding = encoding[0]
-            self.parse_image_item(etree.HTML(resp.text))
+            self.parse_album_image_item(etree.HTML(resp.text))
         else:
             self.logger.warn("下载此页{}失败,返回的状态码为{}".format(abs_next_page, resp.status_code))
 
-    def parse_image_item(self, response):
+    def parse_album_image_item(self, response):
         """
         解析item并返回给pipelines
         :param response: 如果response类型是继承自scrapy的TextResponse类则使用scrapy的Selector来解析，否则使用lxml来解析
