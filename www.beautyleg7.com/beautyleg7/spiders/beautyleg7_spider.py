@@ -84,7 +84,7 @@ class Beautyleg7Spider(scrapy.Spider):
             # 提取下一页并交给scrapy下载
             next_url = response.css('.page li a::attr(href)').extract_first()
             # 如果url重复次数超过阈值则停止爬取
-            if next_url and repeated_count < const.REPEATED_THRESHOLD:
+            if next_url:
                 self.logger.info("Next page：%s" % next_url)
                 yield response.follow(next_url, self.parse)
             else:
