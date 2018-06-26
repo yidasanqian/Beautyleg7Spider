@@ -8,6 +8,15 @@ from ..config.settings import (
     REDIS_PASSWORD, LOCKER_PREFIX)
 
 
+def get_redis_conn_from_pool():
+    """
+    https://www.cnblogs.com/melonjiang/p/5342505.html
+    :return:
+    """
+    pool = redis.ConnectionPool(host=REDIS_HOST, port=REDIS_PORT, password=REDIS_PASSWORD, db=DEFAULT_REDIS_DB)
+    return redis.Redis(connection_pool=pool)
+
+
 def get_redis_conn(**kwargs):
     host = kwargs.get('host', REDIS_HOST)
     port = kwargs.get('port', REDIS_PORT)

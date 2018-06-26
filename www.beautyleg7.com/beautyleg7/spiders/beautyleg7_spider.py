@@ -15,20 +15,29 @@ from sqlalchemy.orm import sessionmaker
 
 from ..items import Album, AlbumImageRelationItem, AlbumItem, AlbumImageItem
 from ..utils.const import const
+from ..utils.redis_util import get_redis_conn_from_pool
 
 
 class Beautyleg7Spider(scrapy.Spider):
     name = 'Beautyleg7Spider'
-    category_list = ['siwameitui', 'xingganmeinv', 'weimeixiezhen', 'ribenmeinv']
+    # category_list = ['siwameitui', 'xingganmeinv', 'weimeixiezhen', 'ribenmeinv']
+    category_list = ['siwameitui']
     start_urls = [('http://www.beautyleg7.com/' + category) for category in category_list]
 
     const.REPEATED_THRESHOLD = 10
 
     def __init__(self, name=None, **kwargs):
         super().__init__(name=None, **kwargs)
+
         self.db_session = None
+
         self.gevent_pool = Pool(32)
 
+        self.redis_cmd = get_redis_conn_from_pool()
+
+        self.ALBUM_URL_REDIS_KEY_PREFIX = "album_url"
+        self.REDIS_LIMITER = ":"
+        self.album_last_item_redis_unique_key = ""
         self.album_item = None
         self.album_image_item_list = []
         self.album_image_relation_item = AlbumImageRelationItem()
@@ -57,11 +66,39 @@ class Beautyleg7Spider(scrapy.Spider):
         if response is None:
             self.logger.warn("响应为空，不做处理！")
         else:
-            category = response.css('.sitepath a')[1].css('a::text').extract_first().strip()
             album_nodes = response.css('.pic .item')
+            category = response.css('.sitepath a')[1].css('a::text').extract_first().strip()
+
+            # 判断最后一页的最后主题是否被持久化
+            is_persisted_last_item = self.redis_cmd.get(self.album_last_item_redis_unique_key)
+            is_last_item_finished = False
+            if is_persisted_last_item is not None and int(is_persisted_last_item):
+                is_last_item_finished = True
+                self.logger.info("已持久化最后一页的最后主题：%s" % self.album_last_item_redis_unique_key)
+
+            # 如果是最后一页则设置Redis存储key:“最后一页页码：最后一条主题url”，value：is_persisted（取值为0或1，默认为0）
+            album_last_page_url = response.meta.get("album_last_page_url")
+            if album_last_page_url is not None:
+                album_last_page_url_last_item_redis_suffix = album_nodes[-1].css('.p a::attr(href)').extract_first()
+                self.album_last_item_redis_unique_key = self.ALBUM_URL_REDIS_KEY_PREFIX + self.REDIS_LIMITER + \
+                                                        self.sub_url_scheme(album_last_page_url,
+                                                                            "") + self.REDIS_LIMITER + \
+                                                        self.sub_url_scheme(album_last_page_url_last_item_redis_suffix,
+                                                                            "")
+
+                self.redis_cmd.setnx(self.album_last_item_redis_unique_key, 0)
+
             for album_node in album_nodes:
                 album_url = album_node.css('.p a::attr(href)').extract_first().strip()
+                # 判断当前主题url是否已持久化
+                is_persisted = self.redis_cmd.get(album_url)
+                if is_persisted is not None and int(is_persisted):
+                    self.logger.info("Redis中该url album_url：%s已持久化" % album_url)
+                    continue
+
                 album_url_object_id = self.get_md5(album_url)
+                # 只有name不存在时，当前set操作才执行
+                self.redis_cmd.setnx(album_url, 0)
                 count = 0
                 try:
                     count = self.db_session.query(func.count()).filter(
@@ -70,10 +107,14 @@ class Beautyleg7Spider(scrapy.Spider):
                         count = count[0]
                 except Exception as e:
                     self.logger.error("查询数据库异常，原因：{}".format(e))
+                finally:
+                    self.db_session.rollback()
 
                 if count:
                     self.logger.info("数据库已有该数据album_url_object_id：%s" % album_url_object_id)
                     repeated_count += 1
+                    # 只有name存在时，当前set操作才执行
+                    self.redis_cmd.set(album_url, 1, xx=True)
                     continue
                 else:
                     album_item = self.parse_album_item(album_node, album_url, album_url_object_id, category)
@@ -82,19 +123,32 @@ class Beautyleg7Spider(scrapy.Spider):
                                           callback=self.parse_detail)
 
             # 提取下一页并交给scrapy下载
-            next_url = response.css('.page li a::attr(href)').extract_first()
-            # 如果url重复次数超过阈值则停止爬取
-            if next_url:
-                self.logger.info("Next page：%s" % next_url)
-                yield response.follow(next_url, self.parse)
+            selector_list = response.css('.page li a::attr(href)')
+            # 如果最后一页的最后一个主题url未被持久化则继续爬取
+            if not is_last_item_finished:
+                if selector_list:
+                    next_url = selector_list[-2].extract()
+                    # todo 这里需要根据category来判断获取的最后一页url
+                    album_last_page_url = None
+                    last_page_url = selector_list[-1].extract()
+                    if next_url == last_page_url:
+                        album_last_page_url = response.urljoin(last_page_url)
+                        self.logger.info("Last page：%s" % album_last_page_url)
+                    else:
+                        self.logger.info("Next page：%s" % response.urljoin(next_url))
+                    yield response.follow(url=next_url,
+                                          meta={"album_last_page_url": album_last_page_url},
+                                          callback=self.parse)
+                else:
+                    self.logger.info("selector_list is None")
+                    self.logger.info("重复次数：%s" % repeated_count)
             else:
-                self.logger.info("None Next page!重复次数：%s" % repeated_count)
-                self.db_session.close()
+                self.logger.info("Stop crawler. None Next page!")
 
     def parse_album_item(self, album_node, album_url, album_url_object_id, category):
         album_title = album_node.css('.p a img::attr(alt)').extract_first().strip()
         cover_url = album_node.css('.p a img::attr(src)').extract_first().strip()
-        regex = "\d+\.\d+.\d+\s+No\.\d+"
+        regex = "\d+\.\d+.\d+\s+No\.\d+|\d+\-\d+-\d+\s+No\.\d+"
         number_group = re.findall(regex, album_title)
         if number_group.__len__() > 0:
             number = number_group[0]
@@ -128,10 +182,6 @@ class Beautyleg7Spider(scrapy.Spider):
         self.album_image_item_list = []
         yield self.album_image_relation_item
 
-    # 执行并获取响应列表（处理异常）
-    # def exception_handler(self, request, exception):
-    #     self.logger.error("请求url：%s,异常:%s" % (request.url, exception))
-
     def get_album_image_item_list(self, abs_next_page):
         """
         使用下页绝对路径同步请求
@@ -162,12 +212,18 @@ class Beautyleg7Spider(scrapy.Spider):
             image_link_list = response.xpath('//div[@class="contents"]/a/img')
             image_link_list = [image_link.attrib['src'] for image_link in image_link_list]
 
-        regex = "\s?\w+\[[^\w]?"
+        regex = "\s?\w+(\(|\[|\s?)[^\w]?"
         regex_group = re.findall(regex, item_title)
-        if regex_group.__len__() > 0:
-            stage_name = regex_group[0].split("[")[0].strip()
-        else:
-            stage_name = "unknown"
+        stage_name = "unknown"
+
+        if len(regex_group) > 0:
+            str = regex_group[-1]
+            if "[" in str:
+                stage_name = str.split("[")[0].strip()
+            elif "(" in str:
+                stage_name = str.split("(")[0].strip()
+            elif re.match("\w*", str):
+                stage_name = str
 
         # 详情页多个图片链接
         for image_url in image_link_list:
@@ -189,3 +245,8 @@ class Beautyleg7Spider(scrapy.Spider):
         m = hashlib.md5()
         m.update(param)
         return m.hexdigest()
+
+    @staticmethod
+    def sub_url_scheme(website, replace_str):
+        scheme_regex = "^(http://|https://)"
+        return re.sub(scheme_regex, replace_str, website)

@@ -24,7 +24,6 @@ CREATE TABLE `beauty7_album_image` (
   `publish_date` datetime DEFAULT NULL,
   `item_title` varchar(255) DEFAULT NULL COMMENT '链接内容标题',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_item_url_object_id` (`item_url_object_id`),
   KEY `idx_stage_name` (`stage_name`),
   KEY `idx_publish_date` (`publish_date`)
 ) ENGINE=InnoDB AUTO_INCREMENT=520 DEFAULT CHARSET=utf8mb4

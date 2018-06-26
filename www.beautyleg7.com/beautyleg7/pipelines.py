@@ -4,38 +4,17 @@
 #
 # Don't forget to add your pipeline to the ITEM_PIPELINES setting
 # See: https://doc.scrapy.org/en/latest/topics/item-pipeline.html
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 
 from .items import Album, AlbumImage
 
 
 class Beautyleg7MySqlPipeline(object):
-    def __init__(self, mysql_host, mysql_port, mysql_user, mysql_password, mysql_db_name):
-        # 初始化数据库连接:
-        engine = create_engine('mysql+mysqlconnector://{}:{}@{}:{}/{}'.format(mysql_user, mysql_password,
-                                                                              mysql_host, mysql_port,
-                                                                              mysql_db_name),
-                               pool_recycle=180, echo=False)
-        # 创建session_maker类型:
-        session_maker = sessionmaker(bind=engine)
-        self.db_session = session_maker()
-
-    @classmethod
-    def from_crawler(cls, crawler):
-        return cls(
-            mysql_host=crawler.settings.get("MYSQL_HOST"),
-            mysql_port=crawler.settings.get("MYSQL_PORT"),
-            mysql_user=crawler.settings.get("MYSQL_USER"),
-            mysql_password=crawler.settings.get("MYSQL_PASSWORD"),
-            mysql_db_name=crawler.settings.get("MYSQL_DB_NAME"),
-        )
 
     def open_spider(self, spider):
         pass
 
     def close_spider(self, spider):
-        self.db_session.close()
+        spider.db_session.close()
 
     def process_item(self, item, spider):
         # AlbumItem
@@ -63,10 +42,15 @@ class Beautyleg7MySqlPipeline(object):
                 album_image = AlbumImage(item_url, item_url_object_id, item_url_list_json, item_title, stage_name,
                                          publish_date, album)
                 album_image_list.append(album_image)
-            self.db_session.add_all(album_image_list)
+            spider.db_session.add_all(album_image_list)
             # 提交即保存到数据库:
-            self.db_session.commit()
+            spider.db_session.commit()
+            spider.redis_cmd.set(album_url, 1, xx=True)
+            # 如果Redis存储的最后一页的最后一条主题url的key不为空，设置其值位1，代表已持久化
+            if spider.album_last_item_redis_unique_key != "":
+                spider.redis_cmd.set(spider.album_last_item_redis_unique_key, 1, xx=True)
         except Exception as e:
             spider.logger.error("插入数据库异常，原因：{}".format(e))
-            self.db_session.rollback()
+        finally:
+            spider.db_session.rollback()
         return item
