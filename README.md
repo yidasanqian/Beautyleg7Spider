@@ -26,7 +26,33 @@ pip install gevent
 ```
 
 #### 使用说明
+**利用Linux系统的crontab进行定时调度：**
 
+首先创建定时调度脚本beautyleg7-schedule.sh:
+```
+#!/usr/bin/env bash
+curl -u yidasanqian:yidasanqian. http://127.0.0.1:80/scrapyd/schedule.json -d project=beautyleg7 -d spider=Beautyleg7Spider
+```
+然后配置定时任务：
+
+使用以下命令配置：
+```
+crontab -e
+```
+添加内容：
+```
+SHELL=/bin/bash
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+MAILTO=""
+HOME=/home/yidasanqian
+
+0 1 * * * $HOME/beautyleg7-schedule.sh >> /var/log/scrapyd/beautyleg7-schedule.log
+
+```
+最后让配置生效：
+```
+service crond reload
+```
 
 #### 技术要点
 [爬虫高性能相关（协程效率最高，IO密集型）](https://www.cnblogs.com/jokerbj/p/8283853.html)
