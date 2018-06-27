@@ -150,7 +150,7 @@ class Beautyleg7Spider(scrapy.Spider):
         cover_url = album_node.css('.p a img::attr(src)').extract_first().strip()
         regex = "\d+\.\d+.\d+\s+No\.\d+|\d+\-\d+-\d+\s+No\.\d+"
         number_group = re.findall(regex, album_title)
-        if number_group.__len__() > 0:
+        if len(number_group) > 0:
             number = number_group[0]
         else:
             number = "No.unknown"
@@ -212,18 +212,17 @@ class Beautyleg7Spider(scrapy.Spider):
             image_link_list = response.xpath('//div[@class="contents"]/a/img')
             image_link_list = [image_link.attrib['src'] for image_link in image_link_list]
 
-        regex = "\s?\w+(\(|\[|\s?)[^\w]?"
+        regex = "\s?\w+[^\w]?"
         regex_group = re.findall(regex, item_title)
         stage_name = "unknown"
-
         if len(regex_group) > 0:
             str = regex_group[-1]
             if "[" in str:
                 stage_name = str.split("[")[0].strip()
             elif "(" in str:
                 stage_name = str.split("(")[0].strip()
-            elif re.match("\w*", str):
-                stage_name = str
+            elif re.match('[^\d*]', str):
+                stage_name = re.match('[^\d*]', str).group()
 
         # 详情页多个图片链接
         for image_url in image_link_list:
