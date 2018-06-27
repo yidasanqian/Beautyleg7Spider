@@ -20,8 +20,7 @@ from ..utils.redis_util import get_redis_conn_from_pool
 
 class Beautyleg7Spider(scrapy.Spider):
     name = 'Beautyleg7Spider'
-    # category_list = ['siwameitui', 'xingganmeinv', 'weimeixiezhen', 'ribenmeinv']
-    category_list = ['siwameitui']
+    category_list = ['siwameitui', 'xingganmeinv', 'weimeixiezhen', 'ribenmeinv']
     start_urls = [('http://www.beautyleg7.com/' + category) for category in category_list]
 
     const.REPEATED_THRESHOLD = 10
@@ -127,10 +126,13 @@ class Beautyleg7Spider(scrapy.Spider):
             # 如果最后一页的最后一个主题url未被持久化则继续爬取
             if not is_last_item_finished:
                 if selector_list:
+                    last_page_url = None
+                    current_url_page = response.xpath('//li[@class="thisclass"]//text()').extract_first()
+                    # 如果当前页是第一页则获取最后一页url
+                    if current_url_page and int(current_url_page) == 1:
+                        last_page_url = selector_list[-1].extract()
+
                     next_url = selector_list[-2].extract()
-                    # todo 这里需要根据category来判断获取的最后一页url
-                    album_last_page_url = None
-                    last_page_url = selector_list[-1].extract()
                     if next_url == last_page_url:
                         album_last_page_url = response.urljoin(last_page_url)
                         self.logger.info("Last page：%s" % album_last_page_url)
